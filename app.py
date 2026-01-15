@@ -1,48 +1,60 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import pandas as pd
+import io
 
 # Sayfa yapılandırması
-st.set_page_config(page_title="AI Karne Analizörü", layout="wide")
+st.set_page_config(page_title="AI Hibrit Analizör", layout="wide")
 
-# Kenar çubuğu (Sidebar) tasarımı
 st.sidebar.title("🛠️ Ayarlar")
 api_key = st.sidebar.text_input("Gemini API Anahtarınızı Girin:", type="password")
 
-st.title("📊 Yapay Zeka Destekli Karne Analizörü")
-st.write("Yüklediğiniz görseldeki verileri analiz eder ve gelişim planı sunar.")
+st.title("📊 AI Görsel & Veri Analiz Asistanı")
+st.write("Resim yükleyerek görsel analiz, Excel yükleyerek sayısal veri analizi yapabilirsiniz.")
 
 if api_key:
-    # Yapay zekayı yapılandır
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-    # Dosya yükleme alanı
-    uploaded_file = st.file_uploader("Bir performans raporu veya karne görseli seçin...", type=['png', 'jpg', 'jpeg'])
+    # Dosya yükleme alanı (Artık Excel ve CSV desteği var!)
+    uploaded_file = st.file_uploader("Dosya seçin (PNG, JPG, XLSX, CSV)", type=['png', 'jpg', 'jpeg', 'xlsx', 'csv'])
     
-    # Kullanıcı talimatı
-    user_prompt = st.text_area("Yapay zekaya özel talimatınız (İsteğe bağlı):", 
-                              "Bu görseldeki verileri detaylıca analiz et. Başarıları öv, eksiklikler için aksiyon planı çıkar.")
+    user_prompt = st.text_area("Yapay zekaya talimatınız:", 
+                              "Bu dosyadaki verileri incele, önemli trendleri bul ve özetle.")
 
     if uploaded_file is not None:
-        image = Image.open(uploaded_file)
+        file_type = uploaded_file.name.split('.')[-1]
         
-        # Ekranı ikiye böl (Sol görsel, sağ analiz)
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.image(image, caption='Yüklenen Rapor', use_container_width=True)
-        
-        if st.button("🚀 Analizi Başlat"):
-            with st.spinner('Yapay zeka verileri inceliyor...'):
-                try:
-                    # Yapay zekaya görseli ve promptu gönder
+        # --- DURUM 1: RESİM ANALİZİ ---
+        if file_type in ['png', 'jpg', 'jpeg']:
+            image = Image.open(uploaded_file)
+            st.image(image, caption='Yüklenen Resim', width=500)
+            
+            if st.button("Resmi Analiz Et"):
+                with st.spinner('Resim inceleniyor...'):
                     response = model.generate_content([user_prompt, image])
+                    st.subheader("🤖 Resim Analiz Sonucu")
+                    st.write(response.text)
+
+        # --- DURUM 2: EXCEL/CSV ANALİZİ ---
+        elif file_type in ['xlsx', 'csv']:
+            if file_type == 'xlsx':
+                df = pd.read_excel(uploaded_file)
+            else:
+                df = pd.read_csv(uploaded_file)
+            
+            st.write("📊 Yüklenen Veri Önizlemesi:")
+            st.dataframe(df.head()) # Verinin ilk 5 satırını gösterir
+            
+            if st.button("Verileri Analiz Et"):
+                with st.spinner('Veriler işleniyor...'):
+                    # Tabloyu metne dönüştürüp yapay zekaya gönderiyoruz
+                    df_string = df.to_string()
+                    full_prompt = f"Aşağıdaki verileri analiz et:\n\n{df_string}\n\nTalimat: {user_prompt}"
                     
-                    with col2:
-                        st.subheader("🤖 Analiz Sonucu")
-                        st.markdown(response.text)
-                except Exception as e:
-                    st.error(f"Bir hata oluştu: {e}")
+                    response = model.generate_content(full_prompt)
+                    st.subheader("🤖 Veri Analiz Raporu")
+                    st.write(response.text)
 else:
-    st.info("💡 Başlamak için sol taraftaki menüye Gemini API anahtarınızı girmeniz gerekiyor.")
+    st.info("💡 Devam etmek için API anahtarınızı girin.")
