@@ -3,95 +3,76 @@ import google.generativeai as genai
 from PIL import Image
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
-# 1. Dashboard Tema ve Sayfa Ayarı
-st.set_page_config(page_title="AI Business Intelligence Dashboard", layout="wide", page_icon="📈")
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+# 1. Dashboard Başlığı ve Stil
+st.set_page_config(page_title="AI Business Intelligence", layout="wide")
+st.title("📈 Profesyonel Veri Analiz Dashboard")
 
-# 2. Sidebar & API
-st.sidebar.title("💳 AI İşlem Merkezi")
-api_key = st.sidebar.text_input("Gemini API Key:", type="password")
-
-st.title("🏛️ Otomatik Veri Analiz ve Dashboard Sistemi")
-st.write("Dosyanızı yükleyin, yapay zeka saniyeler içinde profesyonel raporunuzu hazırlasın.")
+# 2. Sidebar - Güvenli Bağlantı
+st.sidebar.title("🔑 Bağlantı Ayarları")
+api_key = st.sidebar.text_input("Gemini API Anahtarınız:", type="password")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # --- HATA ÇÖZÜCÜ: Otomatik Model Bulma ---
+        with st.sidebar:
+            with st.spinner("Uygun yapay zeka modeli aranıyor..."):
+                available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                # En kararlı modeli seç (Önce flash, yoksa ilk bulduğunu al)
+                selected_model_name = next((m for m in available_models if "flash" in m), available_models[0])
+                model = genai.GenerativeModel(selected_model_name)
+                st.success(f"Bağlantı Başarılı! \nModel: {selected_model_name}")
 
-        # 3. Dosya Yükleme
-        uploaded_file = st.file_uploader("Dosya Sürükleyin (PNG, JPG, XLSX, CSV)", type=['png', 'jpg', 'jpeg', 'xlsx', 'csv'])
+        # 3. Dosya Yükleme Paneli
+        uploaded_file = st.file_uploader("Dosyayı buraya bırakın (Resim, Excel, CSV)", type=['png', 'jpg', 'jpeg', 'xlsx', 'csv'])
 
         if uploaded_file:
             ext = uploaded_file.name.split('.')[-1].lower()
             
-            # --- OTOMATİK ANALİZ MODÜLÜ ---
-            with st.status("🚀 Veriler işleniyor ve dashboard hazırlanıyor...", expanded=True) as status:
+            # --- MODÜL A: GÖRSEL ANALİZ (AHMET YILMAZ KARNESİ GİBİ) ---
+            if ext in ['png', 'jpg', 'jpeg']:
+                image = Image.open(uploaded_file)
+                st.image(image, caption='Yüklenen Analiz Dosyası', use_container_width=True)
                 
-                # A: GÖRSEL KARNE ANALİZİ (Örn: Ahmet Yılmaz Raporu)
-                if ext in ['png', 'jpg', 'jpeg']:
-                    img = Image.open(uploaded_file)
-                    st.image(img, caption='Yüklenen Analiz Görseli', use_container_width=True)
-                    
-                    # Dashboard tipi analiz sorgusu
-                    auto_prompt = """
-                    Bu görseli bir Business Intelligence uzmanı gibi analiz et:
-                    1. Kişi ve Rol bilgisi nedir?
-                    2. Kritik KPI'lar (Kalite, AHT, FCR vb.) nelerdir? Sayısal olarak ver.
-                    3. 'Hata Analizi' ve 'Gelişim Önerileri' kısımlarını madde madde özetle.
-                    4. Yönetici için 3 maddelik acil aksiyon planı çıkar.
-                    """
-                    response = model.generate_content([auto_prompt, img])
-                    
-                    st.subheader("📋 Otomatik Dashboard Raporu")
-                    st.markdown(response.text)
-                    status.update(label="Analiz Tamamlandı!", state="complete")
+                if st.button("🚀 Otomatik Analiz Başlat"):
+                    with st.spinner('Yapay zeka verileri okuyor...'):
+                        prompt = "Bu bir performans karnesidir. İsim, KPI değerleri (Kalite, AHT, FCR), hata analizleri ve gelişim önerilerini profesyonel bir rapor olarak sun."
+                        response = model.generate_content([prompt, image])
+                        st.subheader("🤖 Yapay Zeka Analiz Sonucu")
+                        st.info(response.text)
 
-                # B: EXCEL / CSV ANALİZİ
-                elif ext in ['xlsx', 'csv']:
-                    df = pd.read_excel(uploaded_file, engine='openpyxl') if ext == 'xlsx' else pd.read_csv(uploaded_file)
-                    
-                    # Üst Panel: Otomatik Metrikler
-                    num_cols = df.select_dtypes(include=['number']).columns.tolist()
+            # --- MODÜL B: EXCEL / CSV ANALİZİ ---
+            elif ext in ['xlsx', 'csv']:
+                df = pd.read_excel(uploaded_file, engine='openpyxl') if ext == 'xlsx' else pd.read_csv(uploaded_file)
+                
+                # Otomatik Metrikler (Piyasadaki Dashboardlar gibi)
+                num_cols = df.select_dtypes(include=['number']).columns.tolist()
+                if num_cols:
+                    st.subheader("📊 Temel Metrikler (Ortalama)")
+                    m_cols = st.columns(len(num_cols[:4]))
+                    for i, col in enumerate(num_cols[:4]):
+                        m_cols[i].metric(label=col, value=f"{df[col].mean():.2f}")
+
+                # İnteraktif Tablo ve Grafik
+                tab1, tab2 = st.tabs(["📋 Ham Veri", "📈 Grafik"])
+                with tab1: st.dataframe(df, use_container_width=True)
+                with tab2:
                     if num_cols:
-                        cols = st.columns(len(num_cols[:4]))
-                        for i, col_name in enumerate(num_cols[:4]):
-                            with cols[i]:
-                                st.metric(label=col_name, value=round(df[col_name].mean(), 2), delta="Ortalama")
-
-                    # Orta Panel: Otomatik Grafik
-                    st.subheader("📊 Otomatik Veri Görselleştirme")
-                    if len(num_cols) >= 1:
-                        fig = px.histogram(df, x=df.columns[0], y=num_cols[0], color_discrete_sequence=['#636EFA'], barmode='group')
+                        fig = px.bar(df, y=num_cols[0], title="Otomatik Performans Grafiği", template="plotly_white")
                         st.plotly_chart(fig, use_container_width=True)
 
-                    # Alt Panel: AI Yorumu
-                    st.subheader("🤖 Yapay Zeka Veri Yorumu")
-                    data_summary = df.head(20).to_json(orient="records")
-                    auto_data_prompt = f"Bu verilerdeki gizli trendleri ve anormallikleri bul: {data_summary}"
-                    data_res = model.generate_content(auto_data_prompt)
-                    st.info(data_res.text)
-                    status.update(label="Veri Analizi Hazır!", state="complete")
-
-            # --- PAYLAŞIM VE ÇIKTI ---
-            st.divider()
-            col_down1, col_down2 = st.columns(2)
-            with col_down1:
-                st.button("📧 Raporu E-posta Olarak Taslakla")
-            with col_down2:
-                st.button("📥 PDF Olarak İndir (Yakında)")
+                if st.button("🔍 Veri Trendlerini Analiz Et"):
+                    with st.spinner('AI sayısal verileri yorumluyor...'):
+                        data_json = df.head(20).to_json(orient="records")
+                        prompt = f"Aşağıdaki verilerdeki önemli başarıları ve riskli trendleri açıkla: {data_json}"
+                        response = model.generate_content(prompt)
+                        st.success("Analiz Tamamlandı!")
+                        st.write(response.text)
 
     except Exception as e:
-        if "429" in str(e):
-            st.error("⚠️ Kota doldu. Lütfen 1 dakika bekleyin.")
-        else:
-            st.error(f"Sistem Hatası: {e}")
+        st.error(f"⚠️ Bir sorun oluştu: {e}")
+        st.info("İpucu: Eğer 404 hatası alıyorsanız, API anahtarınızın Google AI Studio'da aktif olduğundan emin olun.")
 else:
-    st.warning("🔑 Lütfen devam etmek için sol menüye API anahtarınızı girin.")
+    st.warning("👈 Lütfen devam etmek için sol tarafa API anahtarınızı girin.")
