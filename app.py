@@ -3,70 +3,95 @@ import google.generativeai as genai
 from PIL import Image
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# 1. Sayfa Ayarları
-st.set_page_config(page_title="AI Veri Analizörü v3", layout="wide")
+# 1. Dashboard Tema ve Sayfa Ayarı
+st.set_page_config(page_title="AI Business Intelligence Dashboard", layout="wide", page_icon="📈")
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
 
-st.sidebar.title("🔑 Ayarlar")
+# 2. Sidebar & API
+st.sidebar.title("💳 AI İşlem Merkezi")
 api_key = st.sidebar.text_input("Gemini API Key:", type="password")
 
-st.title("🚀 Kesintisiz AI Veri Analiz Platformu")
+st.title("🏛️ Otomatik Veri Analiz ve Dashboard Sistemi")
+st.write("Dosyanızı yükleyin, yapay zeka saniyeler içinde profesyonel raporunuzu hazırlasın.")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        
-        # --- KRİTİK GÜNCELLEME: Model Seçim Algoritması ---
-        # Mevcut modelleri listele ve en uygun olanı otomatik bul
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # Tercih sırasına göre model belirle
-        target_model = ""
-        for m in ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-1.0-pro"]:
-            if m in available_models:
-                target_model = m
-                break
-        
-        if not target_model:
-            target_model = available_models[0] # Hiçbiri yoksa ilk bulduğunu seç
-            
-        model = genai.GenerativeModel(target_model)
-        st.sidebar.success(f"Aktif Model: {target_model}")
+        model = genai.GenerativeModel('gemini-1.5-flash')
 
-        # 2. Dosya Yükleme
-        uploaded_file = st.file_uploader("Dosya Seç (PNG, JPG, XLSX, CSV)", type=['png', 'jpg', 'jpeg', 'xlsx', 'csv'])
-        prompt = st.text_area("Analiz Talimatı:", "Bu verideki kritik noktaları ve gelişim önerilerini listele.")
+        # 3. Dosya Yükleme
+        uploaded_file = st.file_uploader("Dosya Sürükleyin (PNG, JPG, XLSX, CSV)", type=['png', 'jpg', 'jpeg', 'xlsx', 'csv'])
 
         if uploaded_file:
             ext = uploaded_file.name.split('.')[-1].lower()
             
-            # --- GÖRSEL ANALİZ ---
-            if ext in ['png', 'jpg', 'jpeg']:
-                img = Image.open(uploaded_file)
-                st.image(img, use_container_width=True)
-                if st.button("🖼️ Görseli Analiz Et"):
-                    res = model.generate_content([prompt, img])
-                    st.markdown(res.text)
-
-            # --- EXCEL ANALİZ ---
-            elif ext in ['xlsx', 'csv']:
-                df = pd.read_excel(uploaded_file, engine='openpyxl') if ext == 'xlsx' else pd.read_csv(uploaded_file)
-                st.dataframe(df.head())
+            # --- OTOMATİK ANALİZ MODÜLÜ ---
+            with st.status("🚀 Veriler işleniyor ve dashboard hazırlanıyor...", expanded=True) as status:
                 
-                # Grafik Alanı
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if num_cols:
-                    col_choice = st.selectbox("Grafik Sütunu:", num_cols)
-                    st.plotly_chart(px.bar(df, y=col_choice))
+                # A: GÖRSEL KARNE ANALİZİ (Örn: Ahmet Yılmaz Raporu)
+                if ext in ['png', 'jpg', 'jpeg']:
+                    img = Image.open(uploaded_file)
+                    st.image(img, caption='Yüklenen Analiz Görseli', use_container_width=True)
+                    
+                    # Dashboard tipi analiz sorgusu
+                    auto_prompt = """
+                    Bu görseli bir Business Intelligence uzmanı gibi analiz et:
+                    1. Kişi ve Rol bilgisi nedir?
+                    2. Kritik KPI'lar (Kalite, AHT, FCR vb.) nelerdir? Sayısal olarak ver.
+                    3. 'Hata Analizi' ve 'Gelişim Önerileri' kısımlarını madde madde özetle.
+                    4. Yönetici için 3 maddelik acil aksiyon planı çıkar.
+                    """
+                    response = model.generate_content([auto_prompt, img])
+                    
+                    st.subheader("📋 Otomatik Dashboard Raporu")
+                    st.markdown(response.text)
+                    status.update(label="Analiz Tamamlandı!", state="complete")
 
-                if st.button("📊 Veriyi Yorumla"):
-                    # Tabloyu JSON formatında gönderiyoruz (AI için okuması daha kolaydır)
-                    data_json = df.to_json(orient="records")
-                    full_query = f"Aşağıdaki JSON verisini analiz et ve özetle:\n\n{data_json}\n\nTalimat: {prompt}"
-                    res = model.generate_content(full_query)
-                    st.markdown(res.text)
+                # B: EXCEL / CSV ANALİZİ
+                elif ext in ['xlsx', 'csv']:
+                    df = pd.read_excel(uploaded_file, engine='openpyxl') if ext == 'xlsx' else pd.read_csv(uploaded_file)
+                    
+                    # Üst Panel: Otomatik Metrikler
+                    num_cols = df.select_dtypes(include=['number']).columns.tolist()
+                    if num_cols:
+                        cols = st.columns(len(num_cols[:4]))
+                        for i, col_name in enumerate(num_cols[:4]):
+                            with cols[i]:
+                                st.metric(label=col_name, value=round(df[col_name].mean(), 2), delta="Ortalama")
+
+                    # Orta Panel: Otomatik Grafik
+                    st.subheader("📊 Otomatik Veri Görselleştirme")
+                    if len(num_cols) >= 1:
+                        fig = px.histogram(df, x=df.columns[0], y=num_cols[0], color_discrete_sequence=['#636EFA'], barmode='group')
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    # Alt Panel: AI Yorumu
+                    st.subheader("🤖 Yapay Zeka Veri Yorumu")
+                    data_summary = df.head(20).to_json(orient="records")
+                    auto_data_prompt = f"Bu verilerdeki gizli trendleri ve anormallikleri bul: {data_summary}"
+                    data_res = model.generate_content(auto_data_prompt)
+                    st.info(data_res.text)
+                    status.update(label="Veri Analizi Hazır!", state="complete")
+
+            # --- PAYLAŞIM VE ÇIKTI ---
+            st.divider()
+            col_down1, col_down2 = st.columns(2)
+            with col_down1:
+                st.button("📧 Raporu E-posta Olarak Taslakla")
+            with col_down2:
+                st.button("📥 PDF Olarak İndir (Yakında)")
 
     except Exception as e:
-        st.error(f"Sistem Hatası: {e}")
+        if "429" in str(e):
+            st.error("⚠️ Kota doldu. Lütfen 1 dakika bekleyin.")
+        else:
+            st.error(f"Sistem Hatası: {e}")
 else:
-    st.info("Devam etmek için API anahtarınızı girin.")
+    st.warning("🔑 Lütfen devam etmek için sol menüye API anahtarınızı girin.")
